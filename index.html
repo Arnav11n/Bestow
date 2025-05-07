@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Image Interaction</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #171717; /* Dark background */
+            color: #ffffff; /* White text */
+        }
+        #prompt-message {
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #ffffff; /* White text */
+        }
+        #upload-button {
+            padding: 10px 15px;
+            cursor: pointer;
+            background-color: #611960; /* Purple button */
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+        }
+        #upload-button:hover {
+            background-color: #7d2879; /* Slightly darker purple on hover */
+        }
+        #result-container {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #2a2a2a;  /* Darker container */
+        }
+        #result-container h2 {
+            color: #ffffff;
+        }
+        #chat-container {
+            margin-top: 20px;
+            display: none;
+        }
+        #chat-history {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            height: 150px;
+            overflow-y: scroll;
+            background-color: #2a2a2a; /* Darker chat history */
+            color: #ffffff;
+        }
+        #chat-input {
+            width: 80%;
+            padding: 8px;
+            background-color: #333333; /* Dark input */
+            color: #ffffff;
+            border: 1px solid #555555;
+            border-radius: 5px;
+
+        }
+        #chat-input:focus {
+             outline-color: #611960; /* Purple outline when focused */
+        }
+
+        #send-button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background-color: #611960; /* Purple button */
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+        }
+         #send-button:hover {
+            background-color: #7d2879; /* Slightly darker purple on hover */
+        }
+
+    </style>
+</head>
+<body bgcolor="#171717">
+    <div id="prompt-message">
+        Please upload Image of your product
+    </div>
+
+    <input type="file" id="image-upload" accept="image/*" style="display: none;">
+    <button id="upload-button" onclick="document.getElementById('image-upload').click();">
+        Click here to upload an image
+    </button>
+
+    <div id="result-container">
+        <h2>Result:</h2>
+        <p id="result-text"></p>
+        <div id="result-image"></div>
+    </div>
+
+    <div id="chat-container">
+        <h2>Continue Chatting</h2>
+        <div id="chat-history"></div>
+        <input type="text" id="chat-input" placeholder="Type your message...">
+        <button id="send-button" onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+        const imageUpload = document.getElementById('image-upload');
+        const resultText = document.getElementById('result-text');
+        const resultImage = document.getElementById('result-image');
+        const predefinedPrompt = "You are a smart sustainability advisor in a waste management app. When a user uploads a photo or description of an item, analyze its potential condition and usage. Recommend one of four options: 'Upcycle', 'Donate', 'Repair', or 'Recycle'. Justify your suggestion in 1-2 friendly lines. Always encourage eco-conscious behavior and highlight environmental benefits.";
+        const chatHistory = document.getElementById('chat-history');
+        const chatInput = document.getElementById('chat-input');
+        const geminiApiKey = "AIzaSyC6-K3LRFkVs2lBuHSYGs6D_if8enJS4v4"; // **IMPORTANT: Replace with your actual API key!**
+        const chatContainer = document.getElementById('chat-container');
+        let conversationHistory = [];
+
+        imageUpload.addEventListener('change', async function() {
+            const file = this.files[0];
+            if (file) {
+                resultText.innerText = "Processing image...";
+                resultImage.innerHTML = "";
+
+                try {
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                        const base64Image = reader.result.split(',')[1];
+
+                        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiApiKey, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                contents: [
+                                    {
+                                        parts: [
+                                            {
+                                                text: predefinedPrompt
+                                            },
+                                            {
+                                                inline_data: {
+                                                    mime_type: 'image/jpeg',
+                                                    data: base64Image
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            const aiResponse = data.candidates[0].content.parts[0].text;
+                            resultText.innerText = aiResponse;
+
+                            const img = document.createElement('img');
+                            img.src = URL.createObjectURL(file);
+                            img.style.maxWidth = '300px';
+                            resultImage.appendChild(img);
+
+                            conversationHistory.push({ role: "user", parts: [{ text: "Uploaded image and prompt" }] });
+                            conversationHistory.push({ role: "model", parts: [{ text: aiResponse }] });
+
+                            chatContainer.style.display = 'block';
+
+                        } else {
+                            const errorData = await response.json();
+                            resultText.innerText = `Error: ${response.statusText} - ${errorData.error.message}`;
+                        }
+                    };
+                    reader.readAsDataURL(file);
+
+                } catch (error) {
+                    resultText.innerText = `Fetch error: ${error}`;
+                }
+            }
+        });
+
+        async function sendMessage() {
+            const message = chatInput.value;
+            chatInput.value = "";
+
+            if (!message.trim()) return;
+
+            chatHistory.innerHTML += `<p><strong>You:</strong> ${message}</p>`;
+
+            conversationHistory.push({ role: "user", parts: [{ text: message }] });
+
+            try {
+                const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + geminiApiKey, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: conversationHistory
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const aiResponse = data.candidates[0].content.parts[0].text;
+                    chatHistory.innerHTML += `<p><strong>AI:</strong> ${aiResponse}</p>`;
+                    conversationHistory.push({ role: "model", parts: [{ text: aiResponse }] });
+                } else {
+                    const errorData = await response.json();
+                    chatHistory.innerHTML += `<p><strong>AI Error:</strong> ${response.statusText} - ${errorData.error.message}</p>`;
+                }
+            } catch (error) {
+                chatHistory.innerHTML += `<p><strong>Fetch error:</strong> ${error}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
